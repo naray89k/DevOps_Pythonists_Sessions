@@ -133,9 +133,48 @@ def write_json(json_dir, file_name, data):
     try:
         json_abs_path = os.path.join(json_dir, file_name)
         with open(json_abs_path, "w", encoding='UTF-8') as file_obj:
-            json.dump(data, file_obj, indent=4, ensure_ascii=False, sort_keys=data.keys())
+            json.dump(data, file_obj, indent=2, ensure_ascii=False, sort_keys=data.keys())
     except Exception as exp:
         print(exp.__class__, exp)
+
+
+def generate_csv_report(categories, json_data, start_date, end_date):
+    csv_content = []
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+    # Filter the report according to the date range given in config file.
+    report_dates = []
+    for date in sorted(json_data):
+        date_obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S").date()
+        if start_date_obj <= date_obj <= end_date_obj:
+            report_dates.append(date)
+
+    report_dates_for_header = [date[0:10] for date in report_dates]
+    header = ["CATEGORIES"] + report_dates_for_header
+    csv_content.append(header)
+
+    for category in categories:
+        datewise_category_sales = []
+        for date in report_dates:
+            if category in json_data[date]:
+                datewise_category_sales.append(json_data[date][category])
+            else:
+                datewise_category_sales.append('£0.00')
+        row = [category] + datewise_category_sales
+        csv_content.append(row)
+    return csv_content
+
+
+def write_report_csvfile(csv_content, csv_dir):
+    try:
+        csv_file_name = os.path.join(csv_dir, f'{datetime.now().strftime("%Y%m%d")}_generated_report.csv')
+        with open(csv_file_name, 'w', newline='') as csv_obj:
+            csv_writer = csv.writer(csv_obj)
+            csv_writer.writerows(csv_content)
+    except Exception as exp:
+        print(exp.__class__, exp)
+        sys.exit(1)
 
 
 def main():
@@ -175,7 +214,6 @@ def main():
         print()
         print()
 
-
     # refine json_data by removing duplicate reports generated in single date by
     # by considering only latest report for that day.
     refined_report = refine_data(report)
@@ -193,6 +231,18 @@ def main():
     # Write report to json file
     print("Writing contents to json file")
     write_json(json_dir, "report.json", json_data)
+
+    # Convert unique_categories to list format
+    unique_categories = list(sorted(unique_categories))
+    # Move "TOTAL_SALES" to the last index.
+    unique_categories.remove("TOTAL_SALES")
+    unique_categories.append("TOTAL_SALES")
+
+    # Prepare csv report content and write it to csv file.
+    print("Preparing csv report content and write it to csv file.")
+    csv_rows = generate_csv_report(unique_categories, json_data, start_date, end_date)
+    write_report_csvfile(csv_rows, csv_dir)
+
 
 if __name__ == '__main__':
     main()
